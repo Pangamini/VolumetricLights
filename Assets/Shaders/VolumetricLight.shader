@@ -1,3 +1,7 @@
+// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
+// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+// Upgrade NOTE: replaced 'unity_World2Shadow' with 'unity_WorldToShadow'
+
 //  Copyright(c) 2016, Michal Skalsky
 //  All rights reserved.
 //
@@ -45,20 +49,20 @@ Shader "Sandbox/VolumetricLight"
 		#if defined(SHADOWS_DEPTH) || defined(SHADOWS_CUBE)
 		#define SHADOWS_NATIVE
 		#endif
-		
+
 		#include "UnityCG.cginc"
 		#include "UnityDeferredLibrary.cginc"
 
 		sampler3D _NoiseTexture;
 		sampler2D _DitherTexture;
-		
+
 		float4 _FrustumCorners[4];
 
 		struct appdata
 		{
 			float4 vertex : POSITION;
 		};
-		
+
 		float4x4 _WorldViewProj;
 		float4x4 _MyLightMatrix0;
 		float4x4 _MyWorld2Shadow;
@@ -94,7 +98,7 @@ Shader "Sandbox/VolumetricLight"
 			v2f o;
 			o.pos = mul(_WorldViewProj, v.vertex);
 			o.uv = ComputeScreenPos(o.pos);
-			o.wpos = mul(_Object2World, v.vertex);
+			o.wpos = mul(unity_ObjectToWorld, v.vertex);
 			return o;
 		}
 
@@ -119,11 +123,11 @@ Shader "Sandbox/VolumetricLight"
 		//-----------------------------------------------------------------------------------------
 		inline float4 GetCascadeShadowCoord(float4 wpos, fixed4 cascadeWeights)
 		{
-			float3 sc0 = mul(unity_World2Shadow[0], wpos).xyz;
-			float3 sc1 = mul(unity_World2Shadow[1], wpos).xyz;
-			float3 sc2 = mul(unity_World2Shadow[2], wpos).xyz;
-			float3 sc3 = mul(unity_World2Shadow[3], wpos).xyz;
-			
+			float3 sc0 = mul(unity_WorldToShadow[0], wpos).xyz;
+			float3 sc1 = mul(unity_WorldToShadow[1], wpos).xyz;
+			float3 sc2 = mul(unity_WorldToShadow[2], wpos).xyz;
+			float3 sc3 = mul(unity_WorldToShadow[3], wpos).xyz;
+
 			float4 shadowMapCoordinate = float4(sc0 * cascadeWeights[0] + sc1 * cascadeWeights[1] + sc2 * cascadeWeights[2] + sc3 * cascadeWeights[3], 1);
 #if defined(UNITY_REVERSED_Z)
 			float  noCascadeWeights = 1 - dot(cascadeWeights, float4(1, 1, 1, 1));
@@ -131,9 +135,9 @@ Shader "Sandbox/VolumetricLight"
 #endif
 			return shadowMapCoordinate;
 		}
-		
+
 		UNITY_DECLARE_SHADOWMAP(_CascadeShadowMapTexture);
-		
+
 		//-----------------------------------------------------------------------------------------
 		// GetLightAttenuation
 		//-----------------------------------------------------------------------------------------
@@ -155,7 +159,7 @@ Shader "Sandbox/VolumetricLight"
 #if defined (DIRECTIONAL_COOKIE)
 			// NOT IMPLEMENTED
 #endif
-#elif defined (SPOT)	
+#elif defined (SPOT)
 			float3 tolight = _LightPos.xyz - wpos;
 			half3 lightDir = normalize(tolight);
 
@@ -192,7 +196,11 @@ Shader "Sandbox/VolumetricLight"
         void ApplyHeightFog(float3 wpos, inout float density)
         {
 #ifdef HEIGHT_FOG
-            density *= exp(-(wpos.y + _HeightFog.x) * _HeightFog.y);
+            //Bolek's linear
+		    density *= saturate((_HeightFog.x - wpos.y) / _HeightFog.y);
+
+		    // Original exp. density:
+            //density *= exp(-(wpos.y + _HeightFog.x) * _HeightFog.y);
 #endif
         }
 
@@ -210,14 +218,14 @@ Shader "Sandbox/VolumetricLight"
             ApplyHeightFog(wpos, density);
 
             return density;
-		}        
+		}
 
 		//-----------------------------------------------------------------------------------------
 		// MieScattering
 		//-----------------------------------------------------------------------------------------
 		float MieScattering(float cosAngle, float4 g)
 		{
-            return g.w * (g.x / (pow(g.y - g.z * cosAngle, 1.5)));			
+            return g.w * (g.x / (pow(g.y - g.z * cosAngle, 1.5)));
 		}
 
 		//-----------------------------------------------------------------------------------------
@@ -267,11 +275,11 @@ Shader "Sandbox/VolumetricLight"
                 float3 tolight = normalize(currentPosition - _LightPos.xyz);
                 cosAngle = dot(tolight, -rayDir);
 				light *= MieScattering(cosAngle, _MieG);
-#endif          
+#endif
 //#endif
 				vlight += light;
 
-				currentPosition += step;				
+				currentPosition += step;
 			}
 
 #if defined (DIRECTIONAL) || defined (DIRECTIONAL_COOKIE)
@@ -283,7 +291,7 @@ Shader "Sandbox/VolumetricLight"
 			vlight *= _LightColor;
 
 			vlight = max(0, vlight);
-#if defined (DIRECTIONAL) || defined (DIRECTIONAL_COOKIE) // use "proper" out-scattering/absorption for dir light 
+#if defined (DIRECTIONAL) || defined (DIRECTIONAL_COOKIE) // use "proper" out-scattering/absorption for dir light
 			vlight.w = exp(-extinction);
 #else
             vlight.w = 0;
@@ -361,14 +369,14 @@ Shader "Sandbox/VolumetricLight"
 			#ifdef SHADOWS_DEPTH
 			#define SHADOWS_NATIVE
 			#endif
-						
-			
+
+
 			fixed4 fragPointInside(v2f i) : SV_Target
-			{	
+			{
 				float2 uv = i.uv.xy / i.uv.w;
 
 				// read depth and reconstruct world position
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);			
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
 
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
@@ -381,7 +389,7 @@ Shader "Sandbox/VolumetricLight"
 				float linearDepth = LinearEyeDepth(depth);
 				float projectedDepth = linearDepth / dot(_CameraForward, rayDir);
 				rayLength = min(rayLength, projectedDepth);
-				
+
 				return RayMarch(i.pos.xy, rayStart, rayDir, rayLength);
 			}
 			ENDCG
@@ -464,7 +472,7 @@ Shader "Sandbox/VolumetricLight"
 
 				// read depth and reconstruct world position
 				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
-			
+
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
 
@@ -493,7 +501,7 @@ Shader "Sandbox/VolumetricLight"
 			}
 			ENDCG
 		}
-				
+
 		// pass 3 - spot light, camera outside
 		Pass
 		{
@@ -518,7 +526,7 @@ Shader "Sandbox/VolumetricLight"
 			#ifdef SHADOWS_DEPTH
 			#define SHADOWS_NATIVE
 			#endif
-			
+
 			float _CosAngle;
 			float4 _ConeAxis;
 			float4 _ConeApex;
@@ -558,7 +566,7 @@ Shader "Sandbox/VolumetricLight"
 				return RayMarch(i.pos.xy, rayEnd, rayDir, rayLength);
 			}
 			ENDCG
-		}		
+		}
 
 		// pass 4 - directional light
 		Pass
@@ -599,18 +607,18 @@ Shader "Sandbox/VolumetricLight"
 				float2 uv : TEXCOORD0;
 				float3 wpos : TEXCOORD1;
 			};
-						
+
 			PSInput vertDir(VSInput i)
 			{
 				PSInput o;
 
-				o.pos = mul(UNITY_MATRIX_MVP, i.vertex);
+				o.pos = UnityObjectToClipPos(i.vertex);
 				o.uv = i.uv;
 
 				// SV_VertexId doesn't work on OpenGL for some reason -> reconstruct id from uv
 				//o.wpos = _FrustumCorners[i.vertexId];
 				o.wpos = _FrustumCorners[i.uv.x + i.uv.y*2];
-				
+
 				return o;
 			}
 
@@ -622,7 +630,7 @@ Shader "Sandbox/VolumetricLight"
 
 				float3 wpos = i.wpos;
 				float3 rayStart = _WorldSpaceCameraPos;
-				float3 rayDir = wpos - _WorldSpaceCameraPos;				
+				float3 rayDir = wpos - _WorldSpaceCameraPos;
 				rayDir *= linearDepth;
 
 				float rayLength = length(rayDir);

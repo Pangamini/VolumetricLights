@@ -31,8 +31,11 @@ using UnityEngine;
 using System.Collections;
 using UnityEngine.Rendering;
 using System;
+using System.Collections.Generic;
+using UnityEditor.SceneManagement;
+using UnityEngine.SceneManagement;
 
-[RequireComponent(typeof(Camera))]
+[RequireComponent(typeof(Camera)), ExecuteAlways]
 public class VolumetricLightRenderer : MonoBehaviour
 {
     public enum VolumtericResolution
@@ -72,7 +75,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     public CommandBuffer GlobalCommandBuffer { get { return _preLightPass; } }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <returns></returns>
     public static Material GetLightMaterial()
@@ -81,7 +84,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <returns></returns>
     public static Mesh GetPointLightMesh()
@@ -90,7 +93,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <returns></returns>
     public static Mesh GetSpotLightMesh()
@@ -99,7 +102,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <returns></returns>
     public RenderTexture GetVolumeLightBuffer()
@@ -113,7 +116,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <returns></returns>
     public RenderTexture GetVolumeLightDepthBuffer()
@@ -127,7 +130,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <returns></returns>
     public static Texture GetDefaultSpotCookie()
@@ -135,11 +138,12 @@ public class VolumetricLightRenderer : MonoBehaviour
         return _defaultSpotCookie;
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    void Awake()
+    [NonSerialized] private bool m_initialized = false;
+    void Initialize()
     {
+        if (m_initialized) return;
+        m_initialized = true;
+
         _camera = GetComponent<Camera>();
         if (_camera.actualRenderingPath == RenderingPath.Forward)
             _camera.depthTextureMode = DepthTextureMode.Depth;
@@ -165,7 +169,7 @@ public class VolumetricLightRenderer : MonoBehaviour
         {
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             _pointLightMesh = go.GetComponent<MeshFilter>().sharedMesh;
-            Destroy(go);
+            DestroyImmediate(go);
         }
 
         if (_spotLightMesh == null)
@@ -190,23 +194,87 @@ public class VolumetricLightRenderer : MonoBehaviour
         GenerateDitherTexture();
     }
 
+#if UNITY_EDITOR
+    private static int s_editorCount;
+    private static readonly HashSet<VolumetricLightRenderer> s_camLayers = new();
+#endif
+
     /// <summary>
-    /// 
+    ///
     /// </summary>
     void OnEnable()
     {
+        Initialize();
         //_camera.RemoveAllCommandBuffers();
         if(_camera.actualRenderingPath == RenderingPath.Forward)
             _camera.AddCommandBuffer(CameraEvent.AfterDepthTexture, _preLightPass);
         else
             _camera.AddCommandBuffer(CameraEvent.BeforeLighting, _preLightPass);
+
+#if UNITY_EDITOR
+        if(Editor_IsNotSceneCamera())
+        {
+            ++s_editorCount;
+            Editor_MaintainSceneCamera();
+        }
+#endif
     }
 
+#if UNITY_EDITOR
+
+    private bool Editor_IsNotSceneCamera()
+    {
+        return (_camera.cameraType & CameraType.SceneView) == 0;
+    }
+
+    private void Editor_DestroyEditorLayers()
+    {
+        foreach (var layer in s_camLayers)
+        {
+            if(layer != null)
+                DestroyImmediate(layer);
+        }
+
+        s_camLayers.Clear();
+    }
+
+    private void Editor_MaintainSceneCamera()
+    {
+        var editorCam = UnityEditor.SceneView.lastActiveSceneView?UnityEditor.SceneView.lastActiveSceneView.camera:null;
+        if (editorCam == null)
+            return;
+
+        if (s_editorCount > 0)
+        {
+            var editorCamComponent = editorCam.GetComponent<VolumetricLightRenderer>();
+            if (editorCamComponent == null)
+            {
+                VolumetricLightRenderer layer = editorCam.gameObject.AddComponent<VolumetricLightRenderer>();
+                layer.enabled = false;
+                // for some reason, this double delayed enabling makes the SceneView NOT jam and render all black
+                UnityEditor.EditorApplication.delayCall += () => { UnityEditor.EditorApplication.delayCall += ()=> layer.enabled = true; };
+                layer.hideFlags = HideFlags.HideAndDontSave;
+                s_camLayers.Add(layer);
+            }
+        }
+        else
+        {
+            Editor_DestroyEditorLayers();
+        }
+    }
+#endif
+
     /// <summary>
-    /// 
     /// </summary>
     void OnDisable()
     {
+#if UNITY_EDITOR
+        if(Editor_IsNotSceneCamera())
+        {
+            --s_editorCount;
+            Editor_MaintainSceneCamera();
+        }
+#endif
         //_camera.RemoveAllCommandBuffers();
         if(_camera.actualRenderingPath == RenderingPath.Forward)
             _camera.RemoveCommandBuffer(CameraEvent.AfterDepthTexture, _preLightPass);
@@ -215,7 +283,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     void ChangeResolution()
     {
@@ -223,16 +291,16 @@ public class VolumetricLightRenderer : MonoBehaviour
         int height = _camera.pixelHeight;
 
         if (_volumeLightTexture != null)
-            Destroy(_volumeLightTexture);
+            DestroyImmediate(_volumeLightTexture);
 
         _volumeLightTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf);
         _volumeLightTexture.name = "VolumeLightBuffer";
         _volumeLightTexture.filterMode = FilterMode.Bilinear;
 
         if (_halfDepthBuffer != null)
-            Destroy(_halfDepthBuffer);
+            DestroyImmediate(_halfDepthBuffer);
         if (_halfVolumeLightTexture != null)
-            Destroy(_halfVolumeLightTexture);
+            DestroyImmediate(_halfVolumeLightTexture);
 
         if (Resolution == VolumtericResolution.Half || Resolution == VolumtericResolution.Quarter)
         {
@@ -265,23 +333,15 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public void OnPreRender()
     {
-
+        Initialize();
         // use very low value for near clip plane to simplify cone/frustum intersection
         Matrix4x4 proj = Matrix4x4.Perspective(_camera.fieldOfView, _camera.aspect, 0.01f, _camera.farClipPlane);
-
-#if UNITY_2017_2_OR_NEWER
-        if (UnityEngine.XR.XRSettings.enabled)
-        {
-            // when using VR override the used projection matrix
-            proj = Camera.current.projectionMatrix;
-        }
-#endif
-
         proj = GL.GetGPUProjectionMatrix(proj, true);
+
         _viewProj = proj * _camera.worldToCameraMatrix;
 
         _preLightPass.Clear();
@@ -344,10 +404,10 @@ public class VolumetricLightRenderer : MonoBehaviour
 
             // horizontal bilateral blur at half res
             Graphics.Blit(_halfVolumeLightTexture, temp, _bilateralBlurMaterial, 2);
-            
+
             // vertical bilateral blur at half res
             Graphics.Blit(temp, _halfVolumeLightTexture, _bilateralBlurMaterial, 3);
-            
+
             // upscale to full res
             Graphics.Blit(_halfVolumeLightTexture, _volumeLightTexture, _bilateralBlurMaterial, 5);
             RenderTexture.ReleaseTemporary(temp);
@@ -363,7 +423,7 @@ public class VolumetricLightRenderer : MonoBehaviour
             Graphics.Blit(temp, _volumeLightTexture, _bilateralBlurMaterial, 1);
             RenderTexture.ReleaseTemporary(temp);
         }
-        
+
         // add volume light buffer to rendered scene
         _blitAddMaterial.SetTexture("_Source", source);
         Graphics.Blit(_volumeLightTexture, destination, _blitAddMaterial, 0);
@@ -381,10 +441,11 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     void Update()
     {
+        Initialize();
         //#if UNITY_EDITOR
         if (_currentResolution != Resolution)
         {
@@ -395,10 +456,15 @@ public class VolumetricLightRenderer : MonoBehaviour
         if ((_volumeLightTexture.width != _camera.pixelWidth || _volumeLightTexture.height != _camera.pixelHeight))
             ChangeResolution();
         //#endif
+
+// #if UNITY_EDITOR
+//         if(Editor_IsNotSceneCamera())
+//             Editor_MaintainSceneCamera();
+// #endif
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     void LoadNoise3dTexture()
     {
@@ -466,7 +532,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     private void GenerateDitherTexture()
     {
@@ -585,7 +651,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <returns></returns>
     private Mesh CreateSpotLightMesh()
