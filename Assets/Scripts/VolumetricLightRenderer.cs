@@ -25,7 +25,9 @@
 //  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 //  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
+// #if UNITY_EDITOR
+// #define _RENDER_SCENEVIEW
+// #endif
 
 using UnityEngine;
 using System.Collections;
@@ -194,7 +196,7 @@ public class VolumetricLightRenderer : MonoBehaviour
         GenerateDitherTexture();
     }
 
-#if UNITY_EDITOR
+#if _RENDER_SCENEVIEW
     private static int s_editorCount;
     private static readonly HashSet<VolumetricLightRenderer> s_camLayers = new();
 #endif
@@ -211,7 +213,7 @@ public class VolumetricLightRenderer : MonoBehaviour
         else
             _camera.AddCommandBuffer(CameraEvent.BeforeLighting, _preLightPass);
 
-#if UNITY_EDITOR
+#if _RENDER_SCENEVIEW
         if(Editor_IsNotSceneCamera())
         {
             ++s_editorCount;
@@ -220,7 +222,7 @@ public class VolumetricLightRenderer : MonoBehaviour
 #endif
     }
 
-#if UNITY_EDITOR
+#if _RENDER_SCENEVIEW
 
     private bool Editor_IsNotSceneCamera()
     {
@@ -268,7 +270,7 @@ public class VolumetricLightRenderer : MonoBehaviour
     /// </summary>
     void OnDisable()
     {
-#if UNITY_EDITOR
+#if _RENDER_SCENEVIEW
         if(Editor_IsNotSceneCamera())
         {
             --s_editorCount;
@@ -457,10 +459,10 @@ public class VolumetricLightRenderer : MonoBehaviour
             ChangeResolution();
         //#endif
 
-// #if UNITY_EDITOR
-//         if(Editor_IsNotSceneCamera())
-//             Editor_MaintainSceneCamera();
-// #endif
+#if _RENDER_SCENEVIEW
+        if(Editor_IsNotSceneCamera())
+            Editor_MaintainSceneCamera();
+#endif
     }
 
     /// <summary>
