@@ -252,7 +252,7 @@ public class VolumetricLightRenderer : MonoBehaviour
                 VolumetricLightRenderer layer = editorCam.gameObject.AddComponent<VolumetricLightRenderer>();
                 layer.enabled = false;
                 // for some reason, this double delayed enabling makes the SceneView NOT jam and render all black
-                UnityEditor.EditorApplication.delayCall += () => { UnityEditor.EditorApplication.delayCall += ()=> layer.enabled = true; };
+                UnityEditor.EditorApplication.delayCall += () => { UnityEditor.EditorApplication.delayCall += ()=> {if(layer != null) layer.enabled = true;}; };
                 layer.hideFlags = HideFlags.HideAndDontSave;
                 s_camLayers.Add(layer);
             }
