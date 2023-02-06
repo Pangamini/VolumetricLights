@@ -25,17 +25,14 @@
 //  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 //  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// #if UNITY_EDITOR
-// #define _RENDER_SCENEVIEW
-// #endif
+#if UNITY_EDITOR
+//#define _RENDER_SCENEVIEW
+#endif
 
 using UnityEngine;
-using System.Collections;
 using UnityEngine.Rendering;
 using System;
 using System.Collections.Generic;
-using UnityEditor.SceneManagement;
-using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(Camera)), ExecuteAlways]
 public class VolumetricLightRenderer : MonoBehaviour
