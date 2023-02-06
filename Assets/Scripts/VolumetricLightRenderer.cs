@@ -455,7 +455,7 @@ public class VolumetricLightRenderer : MonoBehaviour
             ChangeResolution();
         }
 
-        if ((_volumeLightTexture.width != _camera.pixelWidth || _volumeLightTexture.height != _camera.pixelHeight))
+        if (_volumeLightTexture == null || _volumeLightTexture.width != _camera.pixelWidth || _volumeLightTexture.height != _camera.pixelHeight)
             ChangeResolution();
         //#endif
 
