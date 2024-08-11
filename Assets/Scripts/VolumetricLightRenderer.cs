@@ -314,9 +314,9 @@ public class VolumetricLightRenderer : MonoBehaviour
         }
 
         if (_quarterVolumeLightTexture != null)
-            Destroy(_quarterVolumeLightTexture);
+            DestroyImmediate(_quarterVolumeLightTexture);
         if (_quarterDepthBuffer != null)
-            Destroy(_quarterDepthBuffer);
+            DestroyImmediate(_quarterDepthBuffer);
 
         if (Resolution == VolumtericResolution.Quarter)
         {
